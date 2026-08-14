@@ -11,7 +11,7 @@ from datetime import datetime, timezone
 import os
 
 router = APIRouter()
-PANEL_VERSION = "3.0.0"
+PANEL_VERSION = "3.0.1"
 
 
 @router.api_route("/", methods=["GET", "HEAD"])
