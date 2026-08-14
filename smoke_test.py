@@ -21,7 +21,7 @@ def check(name, cond, extra=""):
 
 with httpx.Client(base_url=BASE, timeout=20.0) as c:
     r = c.get("/")
-    check("GET / ", r.status_code == 200 and r.json()["version"] == "3.0.1", r.text[:120])
+    check("GET / ", r.status_code == 200 and r.json()["version"] == "3.0.3", r.text[:120])
     check("GET /health", c.get("/health").status_code == 200)
 
     r = c.get("/panel")

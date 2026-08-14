@@ -59,7 +59,17 @@ async def user_dashboard(uid: str, request: Request):
     elif not link["active"]:
         status = "Blocked"
 
-    vless_link = generate_vless_link(uid, remark=link["label"])
+    vless_link = generate_vless_link(
+        uid, remark=link["label"],
+        extra={
+            "custom_path": link.get("custom_path", ""),
+            "custom_sni": link.get("custom_sni", ""),
+            "custom_host": link.get("custom_host", ""),
+            "custom_fp": link.get("custom_fp", "chrome"),
+            "fragment": link.get("fragment", ""),
+            "transport": link.get("transport") or "ws",
+        },
+    )
     sub_url = f"https://{get_domain()}/sub/{uid}"
     qr_url = "https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=" + quote(sub_url, safe="")
     expiry_str = "Unlimited" if not expires else expires.strftime("%Y-%m-%d %H:%M (UTC)")
@@ -103,6 +113,7 @@ async def subscription_endpoint(uid: str, request: Request):
         "custom_host": link.get("custom_host", ""),
         "custom_fp": link.get("custom_fp", "chrome"),
         "fragment": link.get("fragment", ""),
+        "transport": link.get("transport") or "ws",
     }
 
     status = "active"
