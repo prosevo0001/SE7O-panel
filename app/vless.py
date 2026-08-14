@@ -97,13 +97,13 @@ def generate_vless_link(uid, remark="SE7O", address=None, extra=None):
     if transport == "xhttp":
         path = (extra.get("custom_path") or f"/xhttp/{uid}") if extra else f"/xhttp/{uid}"
         params = {
-            "encryption": "none", "security": "tls", "type": "xhttp", "mode": "stream-up",
+            "encryption": "none", "security": "none", "type": "xhttp", "mode": "stream-up",
             "host": host, "path": path, "sni": sni, "fp": fp, "alpn": "http/1.1",
         }
     else:
         path = (extra.get("custom_path") or f"/ws/{uid}") if extra else f"/ws/{uid}"
         params = {
-            "encryption": "none", "security": "tls", "type": "ws",
+            "encryption": "none", "security": "none", "type": "ws",
             "host": host, "path": path, "sni": sni, "fp": fp, "alpn": "http/1.1",
         }
     if fragment:
@@ -171,11 +171,8 @@ async def parse_vless_header(first_chunk):
         raise ValueError("Malformed VLESS header")
     command = first_chunk[pos]
     pos += 1
-    port = int.from_bytes(first_chunk[pos:pos + 2], "big")
-    pos += 2
     addr_type = first_chunk[pos]
     pos += 1
-
     if addr_type == 1:
         if len(first_chunk) < pos + 4:
             raise ValueError("Incomplete IPv4")
@@ -198,6 +195,8 @@ async def parse_vless_header(first_chunk):
         pos += 16
     else:
         raise ValueError(f"Unsupported address type: {addr_type}")
+    port = int.from_bytes(first_chunk[pos:pos + 2], "big")
+    pos += 2
 
     return command, address, port, first_chunk[pos:]
 
