@@ -11,6 +11,85 @@ from datetime import datetime, timezone, timedelta
 import uuid as uuid_lib
 import re
 import json
+from urllib.parse import urlsplit, parse_qs
+
+
+def _parse_vless_link(raw: str) -> dict | None:
+    """
+    Parse a pasted share link (e.g. vless://uuid@host:port?type=ws&...)
+    into the dict shape import_links() expects. Returns None if the
+    string is not a recognizable VLESS/VMess/Trojan link.
+
+    The transport is derived from the link's `type` query param:
+      type=ws    -> ws
+      type=xhttp -> xhttp
+      type=tcp   -> tcp
+    anything else falls back to 'ws'.
+    """
+    if not isinstance(raw, str):
+        return None
+    raw = raw.strip()
+    if not raw or "://" not in raw:
+        return None
+    try:
+        scheme, _, rest = raw.partition("://")
+        if scheme.lower() not in ("vless", "vmess", "trojan", "vless+ws", "vless+xhttp"):
+            return None
+        # Split off the remark that follows '#' (vless://...?query#remark)
+        rest, _, remark = rest.partition("#")
+        # uuid@host:port ... or uuid?...
+        userinfo, _, netloc_qs = rest.partition("@")
+        if "?" in netloc_qs:
+            netloc, _, qs = netloc_qs.partition("?")
+        else:
+            netloc, qs = netloc_qs, ""
+        # If there was no '@', the part before '?' is the uuid
+        if not netloc:
+            userinfo, _, qs = rest.partition("?")
+            netloc = ""
+        uid = userinfo.strip()
+        try:
+            uuid_lib.UUID(uid)
+        except (ValueError, AttributeError):
+            return None
+        params = {}
+        if qs:
+            for k, v in parse_qs(qs, keep_blank_values=False).items():
+                params[k.lower()] = v[0] if v else ""
+        raw_type = (params.get("type") or "ws").lower()
+        transport = _normalize_transport(raw_type)
+        # SNI / Host / Path from standard Xray link params
+        custom_sni = params.get("sni", "") or params.get("peer", "")
+        custom_host = params.get("host", "")
+        custom_path = params.get("path", "") or params.get("serviceName", "")
+        fp = params.get("fp", "") or params.get("fingerprint", "")
+        fragment = params.get("fragment", "")
+        # Label: prefer the '#' remark, then query 'remark'/'label'
+        label = (remark or params.get("remark") or params.get("label") or "").strip()
+        # The import loop rejects labels outside [A-Za-z0-9\-_. ] — fall
+        # back so a non-ASCII remark doesn't cause the whole link to be
+        # skipped.
+        if not re.match(r"^[a-zA-Z0-9\-_. ]+$", label):
+            label = "Imported"
+        return {
+            "uid": uid,
+            "label": label,
+            "limit_bytes": 0,
+            "used_bytes": 0,
+            "max_connections": 0,
+            "active": True,
+            "expires_at": None,
+            "custom_path": custom_path,
+            "custom_sni": custom_sni,
+            "custom_host": custom_host,
+            "custom_fp": fp,
+            "color": "#39ff14",
+            "flag": "",
+            "fragment": fragment,
+            "transport": transport,
+        }
+    except Exception:
+        return None
 
 router = APIRouter()
 
@@ -338,8 +417,12 @@ async def import_links(request: Request, _=Depends(require_auth)):
 
     imported = 0
     for item in body:
+        # Support pasting raw share links (vless://..., etc.) as strings
         if not isinstance(item, dict):
-            continue
+            if isinstance(item, str):
+                item = _parse_vless_link(item)
+            if not isinstance(item, dict):
+                continue
         uid_input = item.get("uid") or item.get("uuid") or str(uuid_lib.uuid4())
         try:
             uuid_lib.UUID(str(uid_input))

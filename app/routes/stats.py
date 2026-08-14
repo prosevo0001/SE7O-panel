@@ -6,9 +6,27 @@ from app.security import require_auth
 from app import state
 from app.database import fetchall, fetchone
 from datetime import datetime, timezone
+import time
 import psutil
 
 router = APIRouter()
+
+
+def _human_uptime(seconds: float) -> str:
+    """Format a duration in seconds as e.g. '2d 3h 15m' / '45m 12s'."""
+    seconds = int(seconds)
+    if seconds < 0:
+        seconds = 0
+    days, rem = divmod(seconds, 86400)
+    hours, rem = divmod(rem, 3600)
+    minutes, secs = divmod(rem, 60)
+    if days:
+        return f"{days}d {hours}h {minutes}m"
+    if hours:
+        return f"{hours}h {minutes}m"
+    if minutes:
+        return f"{minutes}m {secs}s"
+    return f"{secs}s"
 
 
 @router.get("/stats")
@@ -70,8 +88,15 @@ async def get_stats(_=Depends(require_auth)):
         except Exception:
             pass
 
+    # Uptime: real elapsed time since the process started.
+    start_time = state.stats.get("start_time") or time.time()
+    uptime_seconds = max(0.0, time.time() - start_time)
+    uptime_human = _human_uptime(uptime_seconds)
+
     return {
         "active_connections": conn_count,
+        "uptime_seconds": round(uptime_seconds, 1),
+        "uptime": uptime_human,
         "total_traffic_mb": round(state.stats["total_bytes"] / (1024 * 1024), 2),
         "total_requests": state.stats["total_requests"],
         "total_errors": state.stats["total_errors"],
