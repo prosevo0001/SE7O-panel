@@ -11,7 +11,6 @@ dockerfilePath = "Dockerfile"
 
 [deploy]
 startCommand = "python main.py"
-restartPolicyType = "NEVER"
 
 # Variables that are safe as non-secret defaults (override any of these
 # in the dashboard if you need different values per environment).
